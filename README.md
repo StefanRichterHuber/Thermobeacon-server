@@ -175,7 +175,7 @@ First message with temperature / humidity / uptime. Message length is 20 bytes. 
 | 03-03 | 0x80 if Button is pressed else 00 |
 | 4-09 | mac address |
 | 10-11 | battery level: seems that 3400 = 100% (3400 mV, not quite sure) |
-| 12-13 | temperature (divide by 16 to get actual temperature in °C. If value is gerate than 4000, substract by 4096 to get negative temperatures) |
+| 12-13 | temperature (divide by 16 to get actual temperature in °C. If value is greater than 4000, substract by 4096 to get negative temperatures) |
 | 14-15 | humidity (divide by 16 to get actual humidity in %)|
 | 16-19 | uptime: seconds sinse the last reset |
 
@@ -188,7 +188,7 @@ Second message with min / max temperature. Message length is 22 bytes. Encoding 
 | 02-02 | 00 ? |
 | 03-03 | 0x80 if Button is pressed else 00 |
 | 04-09 | mac address |
-| 10-11 | max temp (divide by 16 to get actual temperature in °C. If value is gerate than 4000, substract by 4096 to get negative temperatures)|
+| 10-11 | max temp (divide by 16 to get actual temperature in °C. If value is greater than 4000, substract by 4096 to get negative temperatures)|
 | 12-15 | max temp time (s) |
-| 16-17 | min temp (divide by 16 to get actual temperature in °C. If value is gerate than 4000, substract by 4096 to get negative temperatures)|
+| 16-17 | min temp (divide by 16 to get actual temperature in °C. If value is greater than 4000, substract by 4096 to get negative temperatures)|
 | 18-21 | min temp time (s) |
