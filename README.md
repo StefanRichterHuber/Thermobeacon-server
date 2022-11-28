@@ -45,7 +45,7 @@ devices: # List of devices to scan (can be multiple devices)
 - mac: xx:xx:xx:xx:xx:xx #MAC of the BLE Thermobeacon. Can be fetched from the app.  Will be part of the MQTT message to identify the source. Required.
   name: Basement # Human readable name of the beacon. Will be part of the MQTT message to identify the source. Required.
   topic: home/ThermoBeacon/Basement # MQTT topic. Defaults to 'ThermoBeacon/{name}'
-cron: "*/1 * * * *" # CRON expression. If none given, the the configured devices are only read once and the app stopps immediately after.
+cron: "*/1 * * * *" # CRON expression. If none given, the configured devices are only read once and the app stopps immediately after.
 #timezone: Europe/Berlin # Timezone for parsing the CRON expression. Defaults to UTC.
 mqtt:
   url: tcp://localhost:1883 # URL to MQTT
@@ -133,7 +133,7 @@ services:
     volumes:
       - node-red-data:/data
 
-  thermobeacon: # Thermoebeacon server to collect data from the thermobeacons.
+  thermobeacon: # Thermobeacon server to collect data from the thermobeacons.
     image: thermobeacon-server:latest
     restart: unless-stopped
     privileged: true # Necessary to have enough permissions to access dbus with bluetooth devices of the host
