@@ -209,12 +209,13 @@ async fn job(config: &AppConfig) -> Result<(), Box<dyn Error>> {
 /// Read the configuration
 fn read_configuration() -> AppConfig {
     let settings = Config::builder()
-        // Add in `./Settings.toml`
-        .add_source(config::File::with_name("config"))
+        // Add optional file source `./config.yml"
+        .add_source(config::File::with_name("config").required(false))
         // Add in settings from the environment (with a prefix of APP)
         // Eg.. `APP_DEBUG=1 ./target/app` would set the `debug` key.  APP_MQTT_PASSWORD would set mqtt.password key.
         .add_source(config::Environment::with_prefix("APP").separator("_"))
-        .set_default("mqtt.keep_alive", 20)
+        // Default connection keep alive of 20s
+        .set_default("mqtt.keepAlive", 20)
         .unwrap()
         .build()
         .unwrap();
