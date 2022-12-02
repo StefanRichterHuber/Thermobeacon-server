@@ -14,8 +14,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag stefanrichterhuber/thermobeaconserver:latest
     - name: Docker Login
       uses: docker/login-action@v2
       with:
