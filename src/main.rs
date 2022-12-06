@@ -279,9 +279,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     debug!("config {:?}", &config);
 
     if config.cron.is_some() {
+        // There is some cron expression present, so we execute the job at a regular interval. Also check for a timezone to correctly calculate next execution.
         let cron_str = config.cron.clone().unwrap();
 
-        // First execution
         info!("Execute job with cron expressions {}", &cron_str);
 
         let timezone_str = config.timezone.as_ref().unwrap();
@@ -289,7 +289,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .parse()
             .unwrap_or_else(|_| DEFAULT_TIMEZONE.to_string().parse().unwrap());
         loop {
-            // Read timezone environment variable, if -present
+            // Calculate the time of the next run (using the configured timezone)
             let now = Utc::now().with_timezone(&timezone);
 
             let next = cron_parser::parse(&cron_str, &now).unwrap();
@@ -298,8 +298,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let instant = tokio::time::Instant::now() + dur;
 
             info!("Next job execution {:?}", next);
-
+            // Sleep until the next run
             tokio::time::sleep_until(instant).await;
+            // FInally execute run
             match job(&config).await {
                 Ok(()) => {
                     debug!("Run was successfull");
