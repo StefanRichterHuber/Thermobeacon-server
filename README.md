@@ -1,3 +1,5 @@
+[![Build](https://github.com/StefanRichterHuber/Thermobeacon-server/actions/workflows/docker-image.yml/badge.svg)](https://github.com/StefanRichterHuber/Thermobeacon-server/actions/workflows/docker-image.yml)
+
 # Thermobeacon-server
 
 This applications uses BLE to scan for ThermoBeacon smart hygrometers and publish the available data to a MQTT server. Its especially designed to work within docker. 
