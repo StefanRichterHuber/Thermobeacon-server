@@ -1,4 +1,4 @@
-FROM rustlang/rust:nightly-slim as builder
+FROM rust as builder
 
 # Install dependencies required for build
 RUN      apt-get update && apt-get install -y libdbus-1-dev libssl-dev build-essential cmake \
@@ -19,6 +19,8 @@ WORKDIR /app
 
 COPY --from=builder /usr/local/cargo/bin/thermobeacon-server /app/thermobeacon-server
 
-RUN chmod +x /app/thermobeacon-server
+# Create empty config file
+RUN    touch /app/config.yml \
+    && chmod +x /app/thermobeacon-server
 
 CMD ["/app/thermobeacon-server"]

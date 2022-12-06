@@ -1,5 +1,3 @@
-#![feature(is_some_and)]
-
 extern crate paho_mqtt as mqtt;
 extern crate pretty_env_logger;
 #[macro_use]
@@ -225,7 +223,8 @@ fn read_configuration() -> AppConfig {
     if config
         .mqtt
         .as_ref()
-        .is_some_and(|c| c.password.is_none() && c.password_file.is_some())
+        .and_then(|c| Some(c.password.is_none() && c.password_file.is_some()))
+        .unwrap_or(false)
     {
         let mqttconfig = config.mqtt.as_ref().unwrap();
         let file = mqttconfig.password_file.as_ref().unwrap();
