@@ -259,10 +259,10 @@ pub struct ThermoBeaconFullReadResult {
 
 /// Reads all possible available data for the configured devices
 pub async fn read_all_configured(
-    devices: &Vec<BDAddr>,
+    manager: &Manager,
+    devices: &Vec<BDAddr>
 ) -> Result<Vec<ThermoBeaconFullReadResult>, Box<dyn Error>> {
     let time_to_wait_between_scans = 5;
-    let manager = Manager::new().await?;
     let adapter_list = manager.adapters().await?;
     if adapter_list.is_empty() {
         error!("No Bluetooth adapters found");
@@ -383,6 +383,7 @@ pub async fn read_all_configured(
                 }
             }
         }
+        adapter.stop_scan().await?;
     }
     return Ok(result);
 }

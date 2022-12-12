@@ -1,7 +1,7 @@
 FROM  debian:buster-slim as builder
 
 # Install dependencies required for build
-RUN      apt-get update && apt-get install -y curl libdbus-1-dev libssl-dev build-essential cmake \
+RUN      apt-get update && apt-get install -y curl libdbus-1-dev libssl-dev build-essential cmake make \
      &&  rm -rf /var/lib/apt/lists/*
 
 # Install rust nightly (to use the sparse registry)

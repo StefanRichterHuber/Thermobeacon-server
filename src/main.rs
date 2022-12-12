@@ -5,7 +5,7 @@ extern crate log;
 
 mod thermobeacon_protocol;
 
-use btleplug::api::BDAddr;
+use btleplug::{api::BDAddr, platform::Manager};
 use chrono::Utc;
 use config::Config;
 use mqtt::AsyncClient;
@@ -19,7 +19,7 @@ use std::{
 #[derive(Debug, Clone, Default, serde_derive::Deserialize, PartialEq, Eq)]
 struct MqttConfig {
     /// URL of the MQTT server
-    url: String,
+    url: Option<String>,
     #[serde(rename(deserialize = "keepAlive"))]
     /// Keep alive time of the connection to the server
     keep_alive: u64,
@@ -49,6 +49,7 @@ pub struct AppDevice {
 #[derive(Debug, Clone, Default, serde_derive::Deserialize, PartialEq, Eq)]
 struct AppConfig {
     /// List of devices to read values from
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
     devices: Vec<AppDevice>,
     /// CRON expression for the poll interval
     cron: Option<String>,
@@ -71,7 +72,7 @@ static DEFAULT_TIMEZONE: &str = "UTC";
 // Tries to connect to the MQTT server using the given MqttConfig
 async fn connect_to_mqtt(mqtt_config: &MqttConfig) -> Result<AsyncClient, Box<dyn Error>> {
     // Create the client
-    let cli = mqtt::AsyncClient::new(mqtt_config.url.clone()).unwrap();
+    let cli = mqtt::AsyncClient::new(mqtt_config.url.clone().unwrap()).unwrap();
 
     let conn_opts = if mqtt_config.password.is_some() && mqtt_config.username.is_some() {
         debug!(
@@ -100,7 +101,10 @@ async fn connect_to_mqtt(mqtt_config: &MqttConfig) -> Result<AsyncClient, Box<dy
 }
 
 /// Collects all results and prints them as JSON to the screen
-async fn collect_and_print_results(devices: &Vec<AppDevice>) -> Result<(), Box<dyn Error>> {
+async fn collect_and_print_results(
+    devices: &Vec<AppDevice>,
+    manager: &Manager,
+) -> Result<(), Box<dyn Error>> {
     debug!("Start collecting data ...");
 
     // MAC adresses to check for ThermoBeacon devices
@@ -108,7 +112,7 @@ async fn collect_and_print_results(devices: &Vec<AppDevice>) -> Result<(), Box<d
         .iter()
         .map(|f| f.mac.parse::<BDAddr>().unwrap() as BDAddr)
         .collect();
-    let results = thermobeacon_protocol::read_all_configured(&macs).await?;
+    let results = thermobeacon_protocol::read_all_configured(manager, &macs).await?;
 
     debug!(
         "Data collected. Found {} of {} devices.",
@@ -138,6 +142,7 @@ async fn collect_and_print_results(devices: &Vec<AppDevice>) -> Result<(), Box<d
 async fn collect_and_send_results(
     cli: &AsyncClient,
     devices: &Vec<AppDevice>,
+    manager: &Manager,
 ) -> Result<(), Box<dyn Error>> {
     debug!("Start collecting data ...");
 
@@ -148,7 +153,7 @@ async fn collect_and_send_results(
         .collect();
 
     // Collect data from these MAC addresses
-    let results = thermobeacon_protocol::read_all_configured(&macs).await?;
+    let results = thermobeacon_protocol::read_all_configured(manager, &macs).await?;
 
     debug!(
         "Data collected. Found {} of {} devices.",
@@ -185,20 +190,23 @@ async fn collect_and_send_results(
 }
 
 /// Executes the actual job: Check mqtt config, connect if possible else just print the results.
-async fn job(config: &AppConfig) -> Result<(), Box<dyn Error>> {
+async fn job(config: &AppConfig, manager: &Manager) -> Result<(), Box<dyn Error>> {
     let client = match &config.mqtt {
-        Some(mqtt_config) => connect_to_mqtt(mqtt_config).await,
+        Some(mqtt_config) => match &mqtt_config.url {
+            Some(_) => connect_to_mqtt(mqtt_config).await,
+            None => Err("No MQTT configuration found".into()),
+        },
         None => Err("No MQTT configuration found".into()),
     };
     match client {
         Ok(c) => {
-            collect_and_send_results(&c, &config.devices).await?;
+            collect_and_send_results(&c, &config.devices, manager).await?;
 
             c.disconnect(None).await?;
         }
         Err(_) => {
             warn!("No valid mqtt configuration found. Results are just printed to the console");
-            collect_and_print_results(&config.devices).await?;
+            collect_and_print_results(&config.devices, manager).await?;
         }
     }
     Ok(())
@@ -275,6 +283,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     pretty_env_logger::init();
 
     let config: AppConfig = read_configuration();
+    // Single instance to prevent D-Bus error: The maximum number of active connections for UID 0 has been reached
+    let manager = Manager::new().await?;
 
     debug!("config {:?}", &config);
 
@@ -301,7 +311,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             // Sleep until the next run
             tokio::time::sleep_until(instant).await;
             // FInally execute run
-            match job(&config).await {
+            match job(&config, &manager).await {
                 Ok(()) => {
                     debug!("Run was successfull");
                 }
@@ -315,7 +325,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     } else {
         info!("No cron descriptor found -> job is executed just once!");
-        match job(&config).await {
+        match job(&config, &manager).await {
             Ok(()) => {
                 debug!("Run was successfull");
             }
