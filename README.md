@@ -48,6 +48,7 @@ devices: # List of devices to scan (can be multiple devices)
   name: Basement # Human readable name of the beacon. Will be part of the MQTT message to identify the source. Required.
   topic: home/ThermoBeacon/Basement # MQTT topic. Defaults to 'ThermoBeacon/{name}'
 cron: "*/1 * * * *" # CRON expression. If none given, the configured devices are only read once and the app stopps immediately after.
+seconds_to_scan: 30 # Seconds to scan for bluetooth devices. Defaults to 30s.
 #timezone: Europe/Berlin # Timezone for parsing the CRON expression. Defaults to UTC.
 mqtt:
   url: tcp://localhost:1883 # URL to MQTT

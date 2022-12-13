@@ -57,6 +57,8 @@ struct AppConfig {
     timezone: Option<String>,
     /// MQTT client configuration
     mqtt: Option<MqttConfig>,
+    /// Time in seconds to scan for devices
+    seconds_to_scan: u64,
 }
 
 /// Structure of MQTT message send
@@ -104,6 +106,7 @@ async fn connect_to_mqtt(mqtt_config: &MqttConfig) -> Result<AsyncClient, Box<dy
 async fn collect_and_print_results(
     devices: &Vec<AppDevice>,
     manager: &Manager,
+    seconds_to_scan: u64
 ) -> Result<(), Box<dyn Error>> {
     debug!("Start collecting data ...");
 
@@ -112,7 +115,7 @@ async fn collect_and_print_results(
         .iter()
         .map(|f| f.mac.parse::<BDAddr>().unwrap() as BDAddr)
         .collect();
-    let results = thermobeacon_protocol::read_all_configured(manager, &macs).await?;
+    let results = thermobeacon_protocol::read_all_configured(manager, &macs, seconds_to_scan).await?;
 
     debug!(
         "Data collected. Found {} of {} devices.",
@@ -143,6 +146,7 @@ async fn collect_and_send_results(
     cli: &AsyncClient,
     devices: &Vec<AppDevice>,
     manager: &Manager,
+    seconds_to_scan: u64
 ) -> Result<(), Box<dyn Error>> {
     debug!("Start collecting data ...");
 
@@ -153,7 +157,7 @@ async fn collect_and_send_results(
         .collect();
 
     // Collect data from these MAC addresses
-    let results = thermobeacon_protocol::read_all_configured(manager, &macs).await?;
+    let results = thermobeacon_protocol::read_all_configured(manager, &macs, seconds_to_scan).await?;
 
     debug!(
         "Data collected. Found {} of {} devices.",
@@ -200,13 +204,13 @@ async fn job(config: &AppConfig, manager: &Manager) -> Result<(), Box<dyn Error>
     };
     match client {
         Ok(c) => {
-            collect_and_send_results(&c, &config.devices, manager).await?;
+            collect_and_send_results(&c, &config.devices, manager, config.seconds_to_scan).await?;
 
             c.disconnect(None).await?;
         }
         Err(_) => {
             warn!("No valid mqtt configuration found. Results are just printed to the console");
-            collect_and_print_results(&config.devices, manager).await?;
+            collect_and_print_results(&config.devices, manager, config.seconds_to_scan).await?;
         }
     }
     Ok(())
@@ -222,6 +226,8 @@ fn read_configuration() -> AppConfig {
         .add_source(config::Environment::with_prefix("APP").separator("_"))
         // Default connection keep alive of 20s
         .set_default("mqtt.keepAlive", 20)
+        .unwrap()
+        .set_default("seconds_to_scan", 30)
         .unwrap()
         .build()
         .unwrap();
@@ -245,6 +251,7 @@ fn read_configuration() -> AppConfig {
                 devices: config.devices,
                 cron: config.cron,
                 timezone: config.timezone,
+                seconds_to_scan: config.seconds_to_scan,
                 mqtt: Some(MqttConfig {
                     url: mqttconfig.url.clone(),
                     keep_alive: mqttconfig.keep_alive,
@@ -269,6 +276,7 @@ fn read_configuration() -> AppConfig {
 
         config = AppConfig {
             devices: config.devices,
+            seconds_to_scan: config.seconds_to_scan,
             cron: config.cron,
             mqtt: config.mqtt,
             timezone: Some(timezone),

@@ -161,25 +161,34 @@ impl From<ThermoBeaconMinMaxRawData> for ThermoBeaconMinMaxData {
     }
 }
 
-
 /// Returns the length of the manufacturer_data field
 fn get_property_length(properties: &PeripheralProperties) -> usize {
     for key in properties.manufacturer_data.keys() {
         return match key {
-            0x10 | 0x11 | 0x15 => properties.manufacturer_data.get(key).unwrap().len(),
+            key if check_if_device_type_is_valid(key) => {
+                properties.manufacturer_data.get(key).unwrap().len()
+            }
             _ => 0,
         };
     }
     return 0;
 }
 
+/// Checks if the device type is valid
+fn check_if_device_type_is_valid(key: &u16) -> bool {
+    match key {
+        // Allowed values 0x10, 0x11, 0x15, 0x1B -> Different for different device types. 0x15 for Thermobeacon rounded corne with display
+        0x10 | 0x11 | 0x15 | 0x1B => true,
+        _ => false,
+    }
+}
+
 /// Parses the current temperature and humidity data from PeripheralProperties
 fn parse_thermo_beacon_data(p: &PeripheralProperties) -> Result<ThermoBeaconData, Box<dyn Error>> {
     trace!("  ThermoBeacon properties {:?}", p);
     for key in p.manufacturer_data.keys() {
-        // Allowed values 0x10, 0x11, 0x15 -> Different for different device types. 0x15 for Thermobeacon rounded corne with display
         match key {
-            0x10 | 0x11 | 0x15 => {
+            key if check_if_device_type_is_valid(key) => {
                 // Read the data
                 let data = p.manufacturer_data.get(&key).unwrap();
                 trace!("  Fetched {:?} bytes of raw data", data.len());
@@ -208,9 +217,8 @@ fn parse_thermo_beacon_min_max_data(
 ) -> Result<ThermoBeaconMinMaxData, Box<dyn Error>> {
     trace!("  ThermoBeacon properties {:?}", p);
     for key in p.manufacturer_data.keys() {
-        // Allowed values 0x10, 0x11, 0x15 -> Different for different device types. 0x15 for Thermobeacon rounded corne with display
         match key {
-            0x10 | 0x11 | 0x15 => {
+            key if check_if_device_type_is_valid(key) => {
                 // Read the data
                 let data = p.manufacturer_data.get(&key).unwrap();
                 trace!("  Fetched {:?} bytes of raw data", data.len());
@@ -260,7 +268,8 @@ pub struct ThermoBeaconFullReadResult {
 /// Reads all possible available data for the configured devices
 pub async fn read_all_configured(
     manager: &Manager,
-    devices: &Vec<BDAddr>
+    devices: &Vec<BDAddr>,
+    seconds_to_scan: u64
 ) -> Result<Vec<ThermoBeaconFullReadResult>, Box<dyn Error>> {
     let time_to_wait_between_scans = 5;
     let adapter_list = manager.adapters().await?;
@@ -276,7 +285,7 @@ pub async fn read_all_configured(
             .start_scan(ScanFilter::default())
             .await
             .expect("Can't scan BLE adapter for connected devices...");
-        time::sleep(Duration::from_secs(10)).await;
+        time::sleep(Duration::from_secs(seconds_to_scan)).await;
         let peripherals = adapter.peripherals().await?;
         if peripherals.is_empty() {
             error!("->>> BLE peripheral devices were not found, sorry. Exiting...");
