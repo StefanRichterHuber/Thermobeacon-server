@@ -9,7 +9,7 @@ use tokio::time::{self};
 // Prelude import with the common imports
 use packed_struct::prelude::*;
 
-// Raw data from ThermoBeacon. Struct uses PackedStruct to parse a byte array
+/// Raw data from ThermoBeacon. Struct uses PackedStruct to parse a byte array
 /// @see https://github.com/iskalchev/ThermoBeacon-pyhap
 ///
 /// Message length: 20 bytes
@@ -196,8 +196,7 @@ fn parse_thermo_beacon_data(p: &PeripheralProperties) -> Result<ThermoBeaconData
                 if data.len() == 18 {
                     let tbrd: ThermoBeaconData = ThermoBeaconRawData::unpack(
                         data[0..18].try_into().expect("slice with incorrect length"),
-                    )
-                    .unwrap()
+                    )?
                     .into();
 
                     return Ok(tbrd);
@@ -226,8 +225,7 @@ fn parse_thermo_beacon_min_max_data(
                 if data.len() == 20 {
                     let tbrd: ThermoBeaconMinMaxData = ThermoBeaconMinMaxRawData::unpack(
                         data[0..20].try_into().expect("slice with incorrect length"),
-                    )
-                    .unwrap()
+                    )?
                     .into();
 
                     return Ok(tbrd);
@@ -269,7 +267,7 @@ pub struct ThermoBeaconFullReadResult {
 pub async fn read_all_configured(
     manager: &Manager,
     devices: &Vec<BDAddr>,
-    seconds_to_scan: u64
+    seconds_to_scan: u64,
 ) -> Result<Vec<ThermoBeaconFullReadResult>, Box<dyn Error>> {
     let time_to_wait_between_scans = 5;
     let adapter_list = manager.adapters().await?;
@@ -313,7 +311,7 @@ pub async fn read_all_configured(
                                         "Reading temperature and humidity from ThermoBeacon {:?}",
                                         peripheral.address()
                                     );
-                                        let data = parse_thermo_beacon_data(&props).unwrap();
+                                        let data = parse_thermo_beacon_data(&props)?;
 
                                         // Wait for the min_max data
                                         while get_property_length(&props) != 20 {
@@ -331,7 +329,7 @@ pub async fn read_all_configured(
                                         peripheral.address()
                                     );
                                         let min_max_data =
-                                            parse_thermo_beacon_min_max_data(&props).unwrap();
+                                            parse_thermo_beacon_min_max_data(&props)?;
 
                                         Some((data, min_max_data))
                                     }
@@ -342,7 +340,7 @@ pub async fn read_all_configured(
                                         peripheral.address()
                                     );
                                         let min_max_data =
-                                            parse_thermo_beacon_min_max_data(&props).unwrap();
+                                            parse_thermo_beacon_min_max_data(&props)?;
 
                                         // Wait  temperature and humidity data
                                         while get_property_length(&props) != 18 {
@@ -359,7 +357,7 @@ pub async fn read_all_configured(
                                         "Reading temperature and humidity from ThermoBeacon {:?}",
                                         peripheral.address()
                                     );
-                                        let data = parse_thermo_beacon_data(&props).unwrap();
+                                        let data = parse_thermo_beacon_data(&props)?;
 
                                         Some((data, min_max_data))
                                     }
