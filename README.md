@@ -47,6 +47,7 @@ devices: # List of devices to scan (can be multiple devices)
 - mac: xx:xx:xx:xx:xx:xx #MAC of the BLE Thermobeacon. Can be fetched from the app.  Will be part of the MQTT message to identify the source. Required.
   name: Basement # Human readable name of the beacon. Will be part of the MQTT message to identify the source. Required.
   topic: home/ThermoBeacon/Basement # MQTT topic. Defaults to 'ThermoBeacon/{name}'
+  retained: false # Should the latest MQTT message be retained by the broker? (Defaults to false)
 cron: "*/1 * * * *" # CRON expression. If none given, the configured devices are only read once and the app stopps immediately after.
 seconds_to_scan: 30 # Seconds to scan for bluetooth devices. Defaults to 30s.
 #timezone: Europe/Berlin # Timezone for parsing the CRON expression. Defaults to UTC.

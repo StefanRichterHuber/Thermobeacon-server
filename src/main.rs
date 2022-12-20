@@ -43,6 +43,9 @@ pub struct AppDevice {
     topic: Option<String>,
     /// QOS level of the MQTT message
     qos: Option<i32>,
+    /// Should  the message be retained by the broker?
+    #[serde(default)]
+    retained: bool,
 }
 
 /// Main configuration structure
@@ -106,7 +109,7 @@ async fn connect_to_mqtt(mqtt_config: &MqttConfig) -> Result<AsyncClient, Box<dy
 async fn collect_and_print_results(
     devices: &Vec<AppDevice>,
     manager: &Manager,
-    seconds_to_scan: u64
+    seconds_to_scan: u64,
 ) -> Result<(), Box<dyn Error>> {
     debug!("Start collecting data ...");
 
@@ -115,7 +118,8 @@ async fn collect_and_print_results(
         .iter()
         .map(|f| f.mac.parse::<BDAddr>().unwrap() as BDAddr)
         .collect();
-    let results = thermobeacon_protocol::read_all_configured(manager, &macs, seconds_to_scan).await?;
+    let results =
+        thermobeacon_protocol::read_all_configured(manager, &macs, seconds_to_scan).await?;
 
     debug!(
         "Data collected. Found {} of {} devices.",
@@ -146,7 +150,7 @@ async fn collect_and_send_results(
     cli: &AsyncClient,
     devices: &Vec<AppDevice>,
     manager: &Manager,
-    seconds_to_scan: u64
+    seconds_to_scan: u64,
 ) -> Result<(), Box<dyn Error>> {
     debug!("Start collecting data ...");
 
@@ -157,7 +161,8 @@ async fn collect_and_send_results(
         .collect();
 
     // Collect data from these MAC addresses
-    let results = thermobeacon_protocol::read_all_configured(manager, &macs, seconds_to_scan).await?;
+    let results =
+        thermobeacon_protocol::read_all_configured(manager, &macs, seconds_to_scan).await?;
 
     debug!(
         "Data collected. Found {} of {} devices.",
@@ -185,8 +190,12 @@ async fn collect_and_send_results(
         let qos = device.qos.unwrap_or(1);
 
         // Json message
-        let json = serde_json::to_string(&msg).unwrap();
-        let msg = mqtt::Message::new(topic, json, qos);
+        let payload = serde_json::to_string(&msg).unwrap();
+        let msg = if device.retained {
+            mqtt::Message::new(topic, payload, qos)
+        } else {
+            mqtt::Message::new_retained(topic, payload, qos)
+        };
         cli.publish(msg).await?;
     }
 
