@@ -1,0 +1,43 @@
+kind: pipeline
+type: docker
+name: default
+
+platform:
+  arch: arm64
+
+steps:
+
+# see https://stackoverflow.com/questions/74108600/drone-pipeline-drone-cache-mount-path-for-maven-repository-not-able-to-resolve
+kind: pipeline
+name: default
+
+steps:
+  - name: docker
+    image: thegeeklab/drone-docker-buildx
+    privileged: true
+    settings:
+      registry: registry.xyreo3.de
+      #username: octocat
+      #password: secure
+      repo: registry.xyreo3.de/thermobeaconserver
+      tags: latest
+      platforms: 
+        # - linux/amd64
+        - linux/arm/v7
+        - linux/arm64
+
+
+# We need to mount the docker socket and the docker config (containing the credentials for the local docker registry)
+volumes:
+- name: dockersock
+  host:
+    path: /var/run/docker.sock
+- name: dockerconfig
+  host:
+    path: /share/stefan/docker/config.json
+- name: cache
+  host:
+    path: /share/stefan/.cache
+
+image_pull_secrets:
+- dockerconfig
