@@ -15,7 +15,7 @@ pub enum HealthStatus {
 }
 
 /// Global flag for current health status
-pub static SYSTEM_STATUS: Mutex<HealthStatus> = Mutex::new(HealthStatus::WaitingForFirstRun);
+static SYSTEM_STATUS: Mutex<HealthStatus> = Mutex::new(HealthStatus::WaitingForFirstRun);
 
 #[get("/health")]
 async fn healthcheck() -> impl Responder {
@@ -54,6 +54,12 @@ async fn not_found() -> actix_web::Result<HttpResponse> {
     Ok(HttpResponse::NotFound().json(response))
 }
 
+/// Sets the current health status of thes
+pub fn set_health_status(next_status: HealthStatus) {
+    let mut status = SYSTEM_STATUS.lock().unwrap();
+    *status = next_status;
+}
+
 /// Starts an actix web server for the health check endpoint
 pub async fn start_healthcheck_server(ip: String, port: u16) -> Result<(), Box<dyn Error>> {
     let srv = HttpServer::new(|| {
@@ -63,6 +69,7 @@ pub async fn start_healthcheck_server(ip: String, port: u16) -> Result<(), Box<d
     })
     .bind((ip, port))?
     .workers(1)
+    .disable_signals()
     .run();
 
     tokio::spawn(srv);

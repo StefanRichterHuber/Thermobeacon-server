@@ -184,7 +184,9 @@ fn check_if_device_type_is_valid(key: &u16) -> bool {
 }
 
 /// Parses the current temperature and humidity data from PeripheralProperties
-fn parse_thermo_beacon_data(p: &PeripheralProperties) -> Result<ThermoBeaconData, Box<dyn Error>> {
+fn parse_thermo_beacon_data(
+    p: &PeripheralProperties,
+) -> Result<ThermoBeaconData, Box<dyn Error + Send + Sync>> {
     trace!("  ThermoBeacon properties {:?}", p);
     for key in p.manufacturer_data.keys() {
         match key {
@@ -213,7 +215,7 @@ fn parse_thermo_beacon_data(p: &PeripheralProperties) -> Result<ThermoBeaconData
 /// Parses the min and max temperature data from PeripheralProperties
 fn parse_thermo_beacon_min_max_data(
     p: &PeripheralProperties,
-) -> Result<ThermoBeaconMinMaxData, Box<dyn Error>> {
+) -> Result<ThermoBeaconMinMaxData, Box<dyn Error + Send + Sync>> {
     trace!("  ThermoBeacon properties {:?}", p);
     for key in p.manufacturer_data.keys() {
         match key {
@@ -268,7 +270,7 @@ pub async fn read_all_configured(
     manager: &Manager,
     devices: &Vec<BDAddr>,
     seconds_to_scan: u64,
-) -> Result<Vec<ThermoBeaconFullReadResult>, Box<dyn Error>> {
+) -> Result<Vec<ThermoBeaconFullReadResult>, Box<dyn Error + Send + Sync>> {
     let time_to_wait_between_scans = 5;
     let adapter_list = manager.adapters().await?;
     if adapter_list.is_empty() {

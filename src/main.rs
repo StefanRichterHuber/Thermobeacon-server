@@ -16,7 +16,7 @@ use std::{error::Error, time::Duration};
 
 use crate::{
     configuration::{read_configuration, AppConfig, DEFAULT_TIMEZONE},
-    health_check_server::{start_healthcheck_server, HealthStatus, SYSTEM_STATUS},
+    health_check_server::{set_health_status, start_healthcheck_server, HealthStatus},
 };
 
 /// Structure of MQTT message send
@@ -27,7 +27,9 @@ struct Message {
 }
 
 // Tries to connect to the MQTT server using the given MqttConfig
-async fn connect_to_mqtt(mqtt_config: &MqttConfig) -> Result<AsyncClient, Box<dyn Error>> {
+async fn connect_to_mqtt(
+    mqtt_config: &MqttConfig,
+) -> Result<AsyncClient, Box<dyn Error + Send + Sync>> {
     // Create the client
     let cli = mqtt::AsyncClient::new(mqtt_config.url.clone().unwrap()).unwrap();
 
@@ -62,7 +64,7 @@ async fn collect_and_print_results(
     devices: &Vec<AppDevice>,
     manager: &Manager,
     seconds_to_scan: u64,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     debug!("Start collecting data ...");
 
     // MAC adresses to check for ThermoBeacon devices
@@ -103,9 +105,8 @@ async fn collect_and_send_results(
     devices: &Vec<AppDevice>,
     manager: &Manager,
     seconds_to_scan: u64,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     debug!("Start collecting data ...");
-
     // MAC adresses to check for ThermoBeacon devices
     let macs = &devices
         .iter()
@@ -155,7 +156,7 @@ async fn collect_and_send_results(
 }
 
 /// Executes the actual job: Check mqtt config, connect if possible else just print the results.
-async fn job(config: &AppConfig, manager: &Manager) -> Result<(), Box<dyn Error>> {
+async fn job(config: &AppConfig, manager: &Manager) -> Result<(), Box<dyn Error + Send + Sync>> {
     let client = match &config.mqtt {
         Some(mqtt_config) => match &mqtt_config.url {
             Some(_) => connect_to_mqtt(mqtt_config).await,
@@ -171,17 +172,52 @@ async fn job(config: &AppConfig, manager: &Manager) -> Result<(), Box<dyn Error>
         }
         Err(_) => {
             warn!("No valid mqtt configuration found. Results are just printed to the console");
-            collect_and_print_results(&config.devices, manager, config.seconds_to_scan).await?;
+            collect_and_print_results(&config.devices, &manager, config.seconds_to_scan).await?;
         }
     }
     Ok(())
+}
+
+async fn next_run(
+    manager: Manager,
+    config: AppConfig,
+    cron_str: String,
+    timezone: chrono_tz::Tz,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    loop {
+        // Calculate the time of the next run (using the configured timezone)
+        let now = Utc::now().with_timezone(&timezone);
+
+        let next = cron_parser::parse(&cron_str, &now).unwrap();
+        let dur = next.signed_duration_since(now).to_std().unwrap();
+
+        let instant = tokio::time::Instant::now() + dur;
+
+        info!("Next job execution {:?}", next);
+        // Sleep until the next run
+        tokio::time::sleep_until(instant).await;
+        // Finally execute run
+        match job(&config, &manager).await {
+            Ok(()) => {
+                set_health_status(HealthStatus::Ok);
+                debug!("Run was successful");
+            }
+            Err(e) => {
+                set_health_status(HealthStatus::LastRunFailed(e.to_string()));
+                error!(
+                    "Failed to read and deliver data, trying again next time: {:?}",
+                    e
+                );
+            }
+        }
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     pretty_env_logger::init();
 
-    let config: AppConfig = read_configuration();
+    let config = read_configuration();
     // Single instance to prevent D-Bus error: The maximum number of active connections for UID 0 has been reached
     let manager = Manager::new().await?;
 
@@ -209,46 +245,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let timezone: chrono_tz::Tz = timezone_str
             .parse()
             .unwrap_or_else(|_| DEFAULT_TIMEZONE.to_string().parse().unwrap());
-        loop {
-            // Calculate the time of the next run (using the configured timezone)
-            let now = Utc::now().with_timezone(&timezone);
 
-            let next = cron_parser::parse(&cron_str, &now).unwrap();
-            let dur = next.signed_duration_since(now).to_std().unwrap();
-
-            let instant = tokio::time::Instant::now() + dur;
-
-            info!("Next job execution {:?}", next);
-            // Sleep until the next run
-            let s = tokio::time::sleep_until(instant);
-            // FInally execute run
-            match job(&config, &manager).await {
-                Ok(()) => {
-                    let mut status = SYSTEM_STATUS.lock().unwrap();
-                    *status = HealthStatus::Ok;
-                    debug!("Run was successful");
-                }
-                Err(e) => {
-                    let mut status = SYSTEM_STATUS.lock().unwrap();
-                    *status = HealthStatus::LastRunFailed(e.to_string());
-                    error!(
-                        "Failed to read and deliver data, trying again next time: {:?}",
-                        e
-                    );
-                }
-            };
-        }
+        let _ = tokio::spawn(next_run(manager, config, cron_str, timezone)).await?;
     } else {
         info!("No cron descriptor found -> job is executed just once!");
         match job(&config, &manager).await {
             Ok(()) => {
-                let mut status = SYSTEM_STATUS.lock().unwrap();
-                *status = HealthStatus::Ok;
+                set_health_status(HealthStatus::Ok);
                 debug!("Run was successful");
             }
             Err(e) => {
-                let mut status = SYSTEM_STATUS.lock().unwrap();
-                *status = HealthStatus::LastRunFailed(e.to_string());
+                set_health_status(HealthStatus::LastRunFailed(e.to_string()));
                 error!("Failed to read and deliver data: {:?}", e);
             }
         };
