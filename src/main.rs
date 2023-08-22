@@ -178,12 +178,21 @@ async fn job(config: &AppConfig, manager: &Manager) -> Result<(), Box<dyn Error 
     Ok(())
 }
 
-async fn next_run(
+/// Executes the job using the configured cron schedule
+async fn run_scheduled(
     manager: Manager,
     config: AppConfig,
-    cron_str: String,
-    timezone: chrono_tz::Tz,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    // There is some cron expression present, so we execute the job at a regular interval. Also check for a timezone to correctly calculate next execution.
+    let cron_str = config.cron.clone().unwrap();
+
+    info!("Execute job with cron expressions {}", &cron_str);
+
+    let timezone_str = config.timezone.as_ref().unwrap();
+    let timezone: chrono_tz::Tz = timezone_str
+        .parse()
+        .unwrap_or_else(|_| DEFAULT_TIMEZONE.to_string().parse().unwrap());
+
     loop {
         // Calculate the time of the next run (using the configured timezone)
         let now = Utc::now().with_timezone(&timezone);
@@ -236,17 +245,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     if config.cron.is_some() {
-        // There is some cron expression present, so we execute the job at a regular interval. Also check for a timezone to correctly calculate next execution.
-        let cron_str = config.cron.clone().unwrap();
-
-        info!("Execute job with cron expressions {}", &cron_str);
-
-        let timezone_str = config.timezone.as_ref().unwrap();
-        let timezone: chrono_tz::Tz = timezone_str
-            .parse()
-            .unwrap_or_else(|_| DEFAULT_TIMEZONE.to_string().parse().unwrap());
-
-        let _ = tokio::spawn(next_run(manager, config, cron_str, timezone)).await?;
+        tokio::spawn(run_scheduled(manager, config)).await?.unwrap();
     } else {
         info!("No cron descriptor found -> job is executed just once!");
         match job(&config, &manager).await {
