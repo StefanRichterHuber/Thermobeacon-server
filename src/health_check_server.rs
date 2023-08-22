@@ -21,7 +21,7 @@ static SYSTEM_STATUS: Mutex<HealthStatus> = Mutex::new(HealthStatus::WaitingForF
 async fn healthcheck() -> impl Responder {
     let status = SYSTEM_STATUS.lock().unwrap();
 
-    let result = match &*status {
+    match &*status {
         HealthStatus::WaitingForFirstRun => {
             debug!("Checked health of service: Waiting for the first run");
             let response = Response {
@@ -42,9 +42,7 @@ async fn healthcheck() -> impl Responder {
             };
             HttpResponse::Ok().json(response)
         }
-    };
-
-    result
+    }
 }
 
 async fn not_found() -> actix_web::Result<HttpResponse> {
@@ -54,7 +52,7 @@ async fn not_found() -> actix_web::Result<HttpResponse> {
     Ok(HttpResponse::NotFound().json(response))
 }
 
-/// Sets the current health status of thes
+/// Sets the current health status of the service
 pub fn set_health_status(next_status: HealthStatus) {
     let mut status = SYSTEM_STATUS.lock().unwrap();
     *status = next_status;

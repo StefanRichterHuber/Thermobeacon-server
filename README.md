@@ -176,7 +176,7 @@ The dockerfile includes `curl` so you could simply add a health check to your `d
 
 ```yml
 healthcheck:
-  test: ["CMD", "curl", "-f", "http://127.0.0.1:8080"]
+  test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/health"]
   interval: 1m
   timeout: 10s
   retries: 3

@@ -107,7 +107,7 @@ async fn collect_and_send_results(
     seconds_to_scan: u64,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     debug!("Start collecting data ...");
-    // MAC adresses to check for ThermoBeacon devices
+    // MAC addresses to check for ThermoBeacon devices
     let macs = &devices
         .iter()
         .map(|f| f.mac.parse::<BDAddr>().unwrap() as BDAddr)
@@ -232,19 +232,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     debug!("config {:?}", &config);
 
-    if config.health.active {
-        let ip = config.health.ip.as_str();
-        let port = config.health.port;
-        start_healthcheck_server(ip.to_string(), port).await?;
-        info!(
-            "Started health check service at http://{}:{}/health",
-            ip, port
-        );
-    } else {
-        debug!("Health check server not active");
-    }
-
     if config.cron.is_some() {
+        // Only start healthcheck server in cron jobs runs
+        if config.health.active {
+            let ip = config.health.ip.as_str();
+            let port = config.health.port;
+            start_healthcheck_server(ip.to_string(), port).await?;
+            info!(
+                "Started health check service at http://{}:{}/health",
+                ip, port
+            );
+        } else {
+            debug!("Health check server not active");
+        }
         tokio::spawn(run_scheduled(manager, config)).await?.unwrap();
     } else {
         info!("No cron descriptor found -> job is executed just once!");
