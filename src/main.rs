@@ -3,66 +3,21 @@ extern crate pretty_env_logger;
 #[macro_use]
 extern crate log;
 
+mod configuration;
+mod health_check_server;
 mod thermobeacon_protocol;
 
 use btleplug::{api::BDAddr, platform::Manager};
 use chrono::Utc;
-use config::Config;
+use configuration::{AppDevice, MqttConfig};
 use mqtt::AsyncClient;
-use std::{
-    env::{self},
-    error::Error,
-    time::Duration,
+
+use std::{error::Error, time::Duration};
+
+use crate::{
+    configuration::{read_configuration, AppConfig, DEFAULT_TIMEZONE},
+    health_check_server::{start_healthcheck_server, HealthStatus, SYSTEM_STATUS},
 };
-
-/// Configuration of the MQTT connection
-#[derive(Debug, Clone, Default, serde_derive::Deserialize, PartialEq, Eq)]
-struct MqttConfig {
-    /// URL of the MQTT server
-    url: Option<String>,
-    #[serde(rename(deserialize = "keepAlive"))]
-    /// Keep alive time of the connection to the server
-    keep_alive: u64,
-    #[serde(rename(deserialize = "username"))]
-    /// Optional username for the mqtt server
-    username: Option<String>,
-    /// Optional password for the mqtt server
-    password: Option<String>,
-    /// Optional password file for the mqtt server password
-    password_file: Option<String>,
-}
-
-/// Configuration of a single known ThermoBeacon device
-#[derive(Debug, Clone, Default, serde_derive::Deserialize, PartialEq, Eq)]
-pub struct AppDevice {
-    /// BLE MAC of the device
-    mac: String,
-    /// Human-readable name of the device (for the MQTT message)
-    name: String,
-    /// Topic of the MQTT message
-    topic: Option<String>,
-    /// QOS level of the MQTT message
-    qos: Option<i32>,
-    /// Should  the message be retained by the broker?
-    #[serde(default)]
-    retained: bool,
-}
-
-/// Main configuration structure
-#[derive(Debug, Clone, Default, serde_derive::Deserialize, PartialEq, Eq)]
-struct AppConfig {
-    /// List of devices to read values from
-    #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    devices: Vec<AppDevice>,
-    /// CRON expression for the poll interval
-    cron: Option<String>,
-    /// Timezone for the CRON expression
-    timezone: Option<String>,
-    /// MQTT client configuration
-    mqtt: Option<MqttConfig>,
-    /// Time in seconds to scan for devices
-    seconds_to_scan: u64,
-}
 
 /// Structure of MQTT message send
 #[derive(Debug, Default, serde_derive::Serialize, PartialEq)]
@@ -70,9 +25,6 @@ struct Message {
     data: thermobeacon_protocol::ThermoBeaconFullReadResult,
     name: String,
 }
-
-/// Timezone assumed if none configured
-static DEFAULT_TIMEZONE: &str = "UTC";
 
 // Tries to connect to the MQTT server using the given MqttConfig
 async fn connect_to_mqtt(mqtt_config: &MqttConfig) -> Result<AsyncClient, Box<dyn Error>> {
@@ -225,76 +177,6 @@ async fn job(config: &AppConfig, manager: &Manager) -> Result<(), Box<dyn Error>
     Ok(())
 }
 
-/// Read the configuration
-fn read_configuration() -> AppConfig {
-    let settings = Config::builder()
-        // Add optional file source `./config.yml"
-        .add_source(config::File::with_name("config").required(false))
-        // Add in settings from the environment (with a prefix of APP)
-        // Eg.. `APP_DEBUG=1 ./target/app` would set the `debug` key.  APP_MQTT_PASSWORD would set mqtt.password key.
-        .add_source(config::Environment::with_prefix("APP").separator("_"))
-        // Default connection keep alive of 20s
-        .set_default("mqtt.keepAlive", 20)
-        .unwrap()
-        .set_default("seconds_to_scan", 30)
-        .unwrap()
-        .build()
-        .unwrap();
-
-    let mut config: AppConfig = settings.try_deserialize().unwrap();
-
-    // Check if we have to load the password file. If it is present, load its content and place it into password field of the mqtt config
-    if config
-        .mqtt
-        .as_ref()
-        .and_then(|c| Some(c.password.is_none() && c.password_file.is_some()))
-        .unwrap_or(false)
-    {
-        let mqttconfig = config.mqtt.as_ref().unwrap();
-        let file = mqttconfig.password_file.as_ref().unwrap();
-
-        let filepw = std::fs::read_to_string(&file);
-
-        config = match filepw {
-            Ok(pw) => AppConfig {
-                devices: config.devices,
-                cron: config.cron,
-                timezone: config.timezone,
-                seconds_to_scan: config.seconds_to_scan,
-                mqtt: Some(MqttConfig {
-                    url: mqttconfig.url.clone(),
-                    keep_alive: mqttconfig.keep_alive,
-                    username: mqttconfig.username.clone(),
-                    password: Some(pw),
-                    password_file: mqttconfig.password_file.clone(),
-                }),
-            },
-            Err(e) => {
-                error!(
-                    "password_file {} configured, but not readable!: {:?}",
-                    file, e
-                );
-                std::process::exit(1);
-            }
-        };
-    }
-
-    // Check if timezone for chron is configured. If not, read environment variable TZ. If no value found, use default timezone UTC to set config variable timezone.
-    if config.timezone.is_none() {
-        let timezone = env::var("TZ").unwrap_or(DEFAULT_TIMEZONE.to_string());
-
-        config = AppConfig {
-            devices: config.devices,
-            seconds_to_scan: config.seconds_to_scan,
-            cron: config.cron,
-            mqtt: config.mqtt,
-            timezone: Some(timezone),
-        };
-    }
-
-    return config;
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     pretty_env_logger::init();
@@ -304,6 +186,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let manager = Manager::new().await?;
 
     debug!("config {:?}", &config);
+
+    if config.health.active {
+        let ip = config.health.ip.as_str();
+        let port = config.health.port;
+        start_healthcheck_server(ip.to_string(), port).await?;
+        info!(
+            "Started health check service at http://{}:{}/health",
+            ip, port
+        );
+    } else {
+        debug!("Health check server not active");
+    }
 
     if config.cron.is_some() {
         // There is some cron expression present, so we execute the job at a regular interval. Also check for a timezone to correctly calculate next execution.
@@ -326,13 +220,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
             info!("Next job execution {:?}", next);
             // Sleep until the next run
-            tokio::time::sleep_until(instant).await;
+            let s = tokio::time::sleep_until(instant);
             // FInally execute run
             match job(&config, &manager).await {
                 Ok(()) => {
-                    debug!("Run was successfull");
+                    let mut status = SYSTEM_STATUS.lock().unwrap();
+                    *status = HealthStatus::Ok;
+                    debug!("Run was successful");
                 }
                 Err(e) => {
+                    let mut status = SYSTEM_STATUS.lock().unwrap();
+                    *status = HealthStatus::LastRunFailed(e.to_string());
                     error!(
                         "Failed to read and deliver data, trying again next time: {:?}",
                         e
@@ -344,9 +242,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         info!("No cron descriptor found -> job is executed just once!");
         match job(&config, &manager).await {
             Ok(()) => {
-                debug!("Run was successfull");
+                let mut status = SYSTEM_STATUS.lock().unwrap();
+                *status = HealthStatus::Ok;
+                debug!("Run was successful");
             }
             Err(e) => {
+                let mut status = SYSTEM_STATUS.lock().unwrap();
+                *status = HealthStatus::LastRunFailed(e.to_string());
                 error!("Failed to read and deliver data: {:?}", e);
             }
         };

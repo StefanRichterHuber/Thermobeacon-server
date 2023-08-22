@@ -2,29 +2,29 @@
 
 # Thermobeacon-server
 
-This applications uses BLE to scan for ThermoBeacon smart hygrometers and publish the available data to a MQTT server. Its especially designed to work within docker. 
+This applications uses BLE to scan for ThermoBeacon smart hygrometers and publish the available data to a MQTT server. Its especially designed to work within docker.
 
 ## Previous work and motivation
- 
+
 I had several ThermoBeacon sensors distributed in my house, which I wanted to integrate into in my smart home setup. Since the current setup uses a MQTT broker to collect sensor data, MQTT was decided to be the target.
 
 There are already at least two projects [thermobeacon](https://github.com/rnlgreen/thermobeacon ) and [ThermoBeacon-pyhap](https://github.com/iskalchev/ThermoBeacon-pyhap) available to access and parse the data from the ThermoBeacons. Both helped me to understand the protcol and write the parser.
 
-Unfortunately both apps where not a perfect fit, especially when the target platform is docker. Python runtime results in relativly heavy-weight containers and both scripts do not support a proper configuration using environment variables (see [The twelve-factor app](https://12factor.net/) ). 
+Unfortunately both apps where not a perfect fit, especially when the target platform is docker. Python runtime results in relativly heavy-weight containers and both scripts do not support a proper configuration using environment variables (see [The twelve-factor app](https://12factor.net/) ).
 
 ## Requirements
 
 Of course you need a host system with a bluetooth BLE adapter.
 To build the project one can either install rust nightly and following dependencies (for debian)
 
-```
-$ apt-get update && apt-get install -y libdbus-1-dev libssl-dev build-essential cmake
+```bash
+apt-get install -y libdbus-1-dev libssl-dev build-essential cmake
 ```
 
 Then adapt the `config.yml` file and just  
 
-```
-$ cargo run
+```bash
+cargo run
 ```
 
 to start collecting data.
@@ -59,13 +59,13 @@ mqtt:
   #password_file # Optional File containing MQTT password (to use docker secrets)
 ```
 
-Alternativly the app can be configured using environment variables. Use the `APP_` prefix, the underscore seperator and uppercase keys to generate the corresponding variable names.
+Alternatively the app can be configured using environment variables. Use the `APP_` prefix, the underscore seperator and uppercase keys to generate the corresponding variable names.
 
 ```env
 APP_DEVICES[0]_MAC=xx:xx:xx:xx:xx:xx
 APP_DEVICES[0]_NAME=Basement
 APP_DEVICES[0]_TOPIC=home/ThermoBeacon/Basement
-APP_DEVICES[1]_MAC=xx:xx:xx:xx:xx:xy
+APP_DEVICES[1]_MAC=xx:xx:xx:  xx:xx:xy
 APP_DEVICES[1]_NAME=Kitchen
 APP_DEVICES[1]_TOPIC=home/ThermoBeacon/Kitchen
 APP_CRON=*/1 * * * *
@@ -74,7 +74,7 @@ APP_MQTT_URL=tcp://localhost:1883
 
 ## MQTT message format
 
-A JSON string is send to configured topic on the MQTT broker. 
+A JSON string is send to configured topic on the MQTT broker.
 
 ```json
 {
@@ -106,13 +106,12 @@ A JSON string is send to configured topic on the MQTT broker.
 - `min_temp_time`:  Time in seconds from the last reset to the time the minimum temperature was read
 - `name`: Given name of the device (see device configuration)
 
-By substracting the `uptime` from the current time, one can determine when the last reset of the sensor happened.
-By substracting `max_temp_time` or `min_temp_time` from `uptime`, one can determine how long ago the corresponding event happened.
-
+By subtracting the `uptime` from the current time, one can determine when the last reset of the sensor happened.
+By subtracting `max_temp_time` or `min_temp_time` from `uptime`, one can determine how long ago the corresponding event happened.
 
 ## Deployment with docker
 
-I recommend writting a `docker-compose.yml` file to properly configure the app.
+I recommend writing a `docker-compose.yml` file to properly configure the app.
 
 ```yml
 # Example configuration for the usage of the thermobeacon server
@@ -160,15 +159,38 @@ volumes:
   node-red-data: # Volume to persist Node red configuration
 ```
 
+## Health check
+
+There is a simple health check endpoint present. By default it is disabled, but it can be activated with either `APP_HEALTH_ACTIVE=true` or in the config file.
+
+```yml
+health:
+  active: true
+  ip: 127.0.0.1
+  port: 8080
+
+```
+
+It provides a simple HTTP endpoint at `http://127.0.0.1:8080/health` which can be polled. It returns status code `404` until the first run, status code `200` for the first successful run and status code `500` if the last run failed.
+The dockerfile includes `curl` so you could simply add a health check to your `docker-compose.yml`. Just ensure the interval matches your cron expression.
+
+```yml
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://127.0.0.1:8080"]
+  interval: 1m
+  timeout: 10s
+  retries: 3
+  start_period: 1m
+```
+
 ## Architecture
 
-In order to create a lightweigt app, Rust was decided to use. Since the interaction with the selected crate to handle BLE ([bteplug](https://lib.rs/crates/btleplug) ) required an async runtime, the whole app is based on tokio.
+In order to create a lightweight app, Rust was decided to use. Since the interaction with the selected crate to handle BLE ([bteplug](https://lib.rs/crates/btleplug) ) required an async runtime, the whole app is based on tokio.
 
- On startup the configuration is read once using [config crate](https://docs.rs/config/latest/config/). If a cron expression (parsed by [cron-parser](https://docs.rs/cron-parser/latest/cron_parser/)) is configured, a loop is entered which calculates the time of the next run based on the cron expression and the configured timezone (or UTC). Without cron expression, fetching and sending the data only happens once before the app quits. To send the data to the mqtt broker, [paho-mqtt](https://github.com/eclipse/paho.mqtt.rust) is used. If no valid mqtt connection is possible, the JSON document is just send to std out. 
+ On startup the configuration is read once using [config crate](https://docs.rs/config/latest/config/). If a cron expression (parsed by [cron-parser](https://docs.rs/cron-parser/latest/cron_parser/)) is configured, a loop is entered which calculates the time of the next run based on the cron expression and the configured timezone (or UTC). Without cron expression, fetching and sending the data only happens once before the app quits. To send the data to the mqtt broker, [paho-mqtt](https://github.com/eclipse/paho.mqtt.rust) is used. If no valid mqtt connection is possible, the JSON document is just send to std out.
 
-The actual handling of the protocol happens in `thermobeacon_protocol.rs`. Each ThermoBeacon device sends alternating messages to the `manufacturer_data` field. One message (identified by a length of 20 bytes) contains the current temperature / humidity / uptime and another message (identified by a length of 22 bytes) contains the minimum / maximum temperature and the time of these events. 
+The actual handling of the protocol happens in `thermobeacon_protocol.rs`. Each ThermoBeacon device sends alternating messages to the `manufacturer_data` field. One message (identified by a length of 20 bytes) contains the current temperature / humidity / uptime and another message (identified by a length of 22 bytes) contains the minimum / maximum temperature and the time of these events.
 For each configured device found, the app waits for both messages. This can take several seconds (up to 30s)! No pairing with the devices is necessary. Using [packed_struct](https://docs.rs/packed_struct/latest/packed_struct/) both raw messages are decoded, proccessed to calculate the real values, then combined into a single message with the given name of the device and send to the target.
-
 
 First message with temperature / humidity / uptime. Message length is 20 bytes. Encoding of multibyte values is lsb. See [ThermoBeacon-pyhap](https://github.com/iskalchev/ThermoBeacon-pyhap).
 
@@ -182,7 +204,6 @@ First message with temperature / humidity / uptime. Message length is 20 bytes. 
 | 12-13 | temperature (divide by 16 to get actual temperature in °C. If value is greater than 4000, substract by 4096 to get negative temperatures) |
 | 14-15 | humidity (divide by 16 to get actual humidity in %)|
 | 16-19 | uptime: seconds sinse the last reset |
-
 
 Second message with min / max temperature. Message length is 22 bytes. Encoding of multibyte values is lsb. See [ThermoBeacon-pyhap](https://github.com/iskalchev/ThermoBeacon-pyhap).
 
