@@ -2,15 +2,15 @@
 
 # Thermobeacon-server
 
-This applications uses BLE to scan for ThermoBeacon smart hygrometers and publish the available data to a MQTT server. Its especially designed to work within docker.
+This applications uses BLE to scan for ThermoBeacon smart hygrometers and publish the available data to a MQTT server. Its especially designed to work within docker. It has build-in support for Home Assistant auto-discovery (for temperature, humidity and battery level).
 
 ## Previous work and motivation
 
 I had several ThermoBeacon sensors distributed in my house, which I wanted to integrate into in my smart home setup. Since the current setup uses a MQTT broker to collect sensor data, MQTT was decided to be the target.
 
-There are already at least two projects [thermobeacon](https://github.com/rnlgreen/thermobeacon ) and [ThermoBeacon-pyhap](https://github.com/iskalchev/ThermoBeacon-pyhap) available to access and parse the data from the ThermoBeacons. Both helped me to understand the protcol and write the parser.
+There are already at least two projects [thermobeacon](https://github.com/rnlgreen/thermobeacon ) and [ThermoBeacon-pyhap](https://github.com/iskalchev/ThermoBeacon-pyhap) available to access and parse the data from the ThermoBeacons. Both helped me to understand the protocol and write the parser.
 
-Unfortunately both apps where not a perfect fit, especially when the target platform is docker. Python runtime results in relativly heavy-weight containers and both scripts do not support a proper configuration using environment variables (see [The twelve-factor app](https://12factor.net/) ).
+Unfortunately both apps where not a perfect fit, especially when the target platform is docker. Python runtime results in relatively heavy-weight containers and both scripts do not support a proper configuration using environment variables (see [The twelve-factor app](https://12factor.net/) ).
 
 ## Requirements
 
@@ -29,7 +29,7 @@ cargo run
 
 to start collecting data.
 
-Or you can just use the given `Dockerfile` to build an image suitable for your platform.
+Or you can just run `docker pull stefanrichterhuber/thermobeaconserver:latest` or the given `Dockerfile` to build an image suitable for your platform.
 
 ## Configuration
 
@@ -47,19 +47,22 @@ devices: # List of devices to scan (can be multiple devices)
 - mac: xx:xx:xx:xx:xx:xx #MAC of the BLE Thermobeacon. Can be fetched from the app.  Will be part of the MQTT message to identify the source. Required.
   name: Basement # Human readable name of the beacon. Will be part of the MQTT message to identify the source. Required.
   topic: home/ThermoBeacon/Basement # MQTT topic. Defaults to 'ThermoBeacon/{name}'
+  manufacturer: AnyOne # Optional device manufacturer for Home Assistant auto discovery. Defaults to 'Unknown'
+  model: Smart hygrometer # Optional device model for Home Assistant auto discovery. Defaults to 'Smart hygrometer'
   retained: false # Should the latest MQTT message be retained by the broker? (Defaults to false)
-cron: "*/1 * * * *" # CRON expression. If none given, the configured devices are only read once and the app stopps immediately after.
+cron: "*/1 * * * *" # CRON expression. If none given, the configured devices are only read once and the app stops immediately after.
 seconds_to_scan: 30 # Seconds to scan for bluetooth devices. Defaults to 30s.
 #timezone: Europe/Berlin # Timezone for parsing the CRON expression. Defaults to UTC.
 mqtt:
   url: tcp://localhost:1883 # URL to MQTT
   #keepAlive: 20 # Optional time to eep alive the connection to mqtt server. Defaults to 20s 
-  #username: # Optional MQTT user. If not set, anonymous access tot server is tried.
-  #password: # Optional MQTT password. If not set, anonymous access tot server is tried.
+  #username: # Optional MQTT user. If not set, anonymous access to server is tried.
+  #password: # Optional MQTT password. If not set, anonymous access to server is tried.
   #password_file # Optional File containing MQTT password (to use docker secrets)
+  #homeassistant # Enable optional Home Assistant auto-discovery support. Defaults to false.
 ```
 
-Alternatively the app can be configured using environment variables. Use the `APP_` prefix, the underscore seperator and uppercase keys to generate the corresponding variable names.
+Alternatively the app can be configured using environment variables. Use the `APP_` prefix, the underscore separator and uppercase keys to generate the corresponding variable names.
 
 ```env
 APP_DEVICES[0]_MAC=xx:xx:xx:xx:xx:xx

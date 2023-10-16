@@ -5,6 +5,7 @@ extern crate log;
 
 mod configuration;
 mod health_check_server;
+mod homeassistant;
 mod thermobeacon_protocol;
 
 use btleplug::{api::BDAddr, platform::Manager};
@@ -27,7 +28,7 @@ struct Message {
 }
 
 // Tries to connect to the MQTT server using the given MqttConfig
-async fn connect_to_mqtt(
+pub async fn connect_to_mqtt(
     mqtt_config: &MqttConfig,
 ) -> Result<AsyncClient, Box<dyn Error + Send + Sync>> {
     // Create the client
@@ -39,17 +40,15 @@ async fn connect_to_mqtt(
             mqtt_config.username.clone().unwrap()
         );
 
-        mqtt::ConnectOptionsBuilder::new()
+        mqtt::ConnectOptionsBuilder::new_v5()
             .keep_alive_interval(Duration::from_secs(mqtt_config.keep_alive))
             .user_name(mqtt_config.username.clone().unwrap())
             .password(mqtt_config.password.clone().unwrap())
-            .clean_session(true)
             .finalize()
     } else {
         debug!("Configuration of MQTT without username / password");
-        mqtt::ConnectOptionsBuilder::new()
+        mqtt::ConnectOptionsBuilder::new_v5()
             .keep_alive_interval(Duration::from_secs(mqtt_config.keep_alive))
-            .clean_session(true)
             .finalize()
     };
     // Connect with default options and wait for it to complete or fail
@@ -223,7 +222,7 @@ async fn run_scheduled(
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     pretty_env_logger::init();
 
     let config = read_configuration();
@@ -231,6 +230,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let manager = Manager::new().await?;
 
     debug!("config {:?}", &config);
+
+    if let Some(mqtt_config) = &config.mqtt {
+        if mqtt_config.homeassistant {
+            info!("Home Assistant auto-discovery enabled!");
+            homeassistant::publish_homeassistant_device_discovery_messages(&config).await?;
+        }
+    }
 
     if config.cron.is_some() {
         // Only start healthcheck server in cron jobs runs

@@ -59,7 +59,10 @@ pub fn set_health_status(next_status: HealthStatus) {
 }
 
 /// Starts an actix web server for the health check endpoint
-pub async fn start_healthcheck_server(ip: String, port: u16) -> Result<(), Box<dyn Error>> {
+pub async fn start_healthcheck_server(
+    ip: String,
+    port: u16,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     let srv = HttpServer::new(|| {
         App::new()
             .service(healthcheck)

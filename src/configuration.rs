@@ -17,6 +17,9 @@ pub struct MqttConfig {
     pub password: Option<String>,
     /// Optional password file for the mqtt server password
     pub password_file: Option<String>,
+    /// Optional support for Home assistant
+    #[serde(default)]
+    pub homeassistant: bool,
 }
 
 /// Configuration of a single known ThermoBeacon device
@@ -33,6 +36,8 @@ pub struct AppDevice {
     /// Should  the message be retained by the broker?
     #[serde(default)]
     pub retained: bool,
+    pub manufacturer: Option<String>,
+    pub model: Option<String>,
 }
 
 /// Configuration of the health check
