@@ -6,16 +6,16 @@ This applications uses BLE to scan for ThermoBeacon smart hygrometers and publis
 
 ## Previous work and motivation
 
-I had several ThermoBeacon sensors distributed in my house, which I wanted to integrate into in my smart home setup. Since the current setup uses a MQTT broker to collect sensor data, MQTT was decided to be the target.
+I had several ThermoBeacon sensors distributed in my house, which I wanted to integrate into in my smart home setup. Since the current setup uses a MQTT broker to collect sensor data, MQTT was decided to be the target platform.
 
 There are already at least two projects [thermobeacon](https://github.com/rnlgreen/thermobeacon ) and [ThermoBeacon-pyhap](https://github.com/iskalchev/ThermoBeacon-pyhap) available to access and parse the data from the ThermoBeacons. Both helped me to understand the protocol and write the parser.
 
-Unfortunately both apps where not a perfect fit, especially when the target platform is docker. Python runtime results in relatively heavy-weight containers and both scripts do not support a proper configuration using environment variables (see [The twelve-factor app](https://12factor.net/) ).
+Unfortunately both apps where not a perfect fit, especially when the deployment platform is docker. Python runtime results in relatively heavy-weight containers and both scripts do not support a proper configuration using environment variables (see [The twelve-factor app](https://12factor.net/) ).
 
 ## Requirements
 
 Of course you need a host system with a bluetooth BLE adapter.
-To build the project one can either install rust nightly and following dependencies (for debian)
+To build the project one can either install rust and following dependencies (for debian)
 
 ```bash
 apt-get install -y libdbus-1-dev libssl-dev build-essential cmake
@@ -29,7 +29,7 @@ cargo run
 
 to start collecting data.
 
-Or you can just run `docker pull stefanrichterhuber/thermobeaconserver:latest` or the given `Dockerfile` to build an image suitable for your platform.
+Or you can just run `docker pull stefanrichterhuber/thermobeaconserver:latest` or the given multistage `Dockerfile` to build an image suitable for your platform. Just rembember the container needs to be privileged (to access Bluetooth) and the necessary `/var/run/dbus/system_bus_socket` must be handed into the container.
 
 ## Configuration
 
@@ -47,7 +47,7 @@ devices: # List of devices to scan (can be multiple devices)
 - mac: xx:xx:xx:xx:xx:xx #MAC of the BLE Thermobeacon. Can be fetched from the app.  Will be part of the MQTT message to identify the source. Required.
   name: Basement # Human readable name of the beacon. Will be part of the MQTT message to identify the source. Required.
   topic: home/ThermoBeacon/Basement # MQTT topic. Defaults to 'ThermoBeacon/{name}'
-  manufacturer: AnyOne # Optional device manufacturer for Home Assistant auto discovery. Defaults to 'Unknown'
+  manufacturer: Unknown # Optional device manufacturer for Home Assistant auto discovery. Defaults to 'Unknown'
   model: Smart hygrometer # Optional device model for Home Assistant auto discovery. Defaults to 'Smart hygrometer'
   retained: false # Should the latest MQTT message be retained by the broker? (Defaults to false)
 cron: "*/1 * * * *" # CRON expression. If none given, the configured devices are only read once and the app stops immediately after.
@@ -55,7 +55,6 @@ seconds_to_scan: 30 # Seconds to scan for bluetooth devices. Defaults to 30s.
 #timezone: Europe/Berlin # Timezone for parsing the CRON expression. Defaults to UTC.
 mqtt:
   url: tcp://localhost:1883 # URL to MQTT
-  #keepAlive: 20 # Optional time to eep alive the connection to mqtt server. Defaults to 20s 
   #username: # Optional MQTT user. If not set, anonymous access to server is tried.
   #password: # Optional MQTT password. If not set, anonymous access to server is tried.
   #password_file # Optional File containing MQTT password (to use docker secrets)
@@ -153,7 +152,7 @@ services:
       - APP_DEVICES[1]_NAME=Kitchen
       - APP_DEVICES[1]_TOPIC=home/ThermoBeacon/Kitchen
       - APP_CRON=*/1 * * * *
-      - APP_MQTT_URL=tcp://localhost:1883 
+      - APP_MQTT_URL=tcp://mqtt:1883 
     volumes:
       - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket # Necessary to access the bluetooth devices of the host
       # - ./config.yml:/app/config.yml # Instead of using environment variables, one can also just map a config file
@@ -220,3 +219,5 @@ Second message with min / max temperature. Message length is 22 bytes. Encoding 
 | 12-15 | max temp time (s) |
 | 16-17 | min temp (divide by 16 to get actual temperature in °C. If value is greater than 4000, substract by 4096 to get negative temperatures)|
 | 18-21 | min temp time (s) |
+
+Home Assistant auto-discovery is implemented by sending the corresponding MQTT [Discovery Messages](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery) at program startup for humidity, temperature and battery level using the hard-coded config topics: `homeassistant/sensor/thermobeacon/[device_mac with : replaced with _]_[temperature|humidity|battery]/config`. The state topic in the config references the configured topic for the device (e.g `ThermoBeacon/[device name]`). The server does not check if the configured device is reachable before announcing it to Home Assistant.
