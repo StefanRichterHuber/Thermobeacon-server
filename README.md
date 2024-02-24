@@ -61,7 +61,7 @@ mqtt:
   #homeassistant # Enable optional Home Assistant auto-discovery support. Defaults to false.
 ```
 
-Alternatively the app can be configured using environment variables. Use the `APP_` prefix, the underscore separator and uppercase keys to generate the corresponding variable names.
+Alternatively the app can be configured using environment variables. Use the `APP_` prefix, the underscore separator and uppercase keys to generate the corresponding variable names. The app also supports using `.env` files.
 
 ```env
 APP_DEVICES[0]_MAC=xx:xx:xx:xx:xx:xx

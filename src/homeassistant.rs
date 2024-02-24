@@ -72,7 +72,7 @@ pub async fn publish_homeassistant_device_discovery_messages(
                 "homeassistant/sensor/thermobeacon/{}_humidity/config",
                 device.mac.replace(":", "_")
             );
-            let payload_humidity: MQTTDiscovery = MQTTDiscovery {
+            let payload_humidity = MQTTDiscovery {
                 device_class: "humidity".to_string(),
                 state_topic: topic.clone(),
                 unit_of_measurement: "%".to_string(),
@@ -85,7 +85,7 @@ pub async fn publish_homeassistant_device_discovery_messages(
                 "homeassistant/sensor/thermobeacon/{}_battery/config",
                 device.mac.replace(":", "_")
             );
-            let payload_battery: MQTTDiscovery = MQTTDiscovery {
+            let payload_battery = MQTTDiscovery {
                 device_class: "battery".to_string(),
                 state_topic: topic.clone(),
                 unit_of_measurement: "%".to_string(),

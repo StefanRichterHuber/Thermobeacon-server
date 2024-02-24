@@ -1,6 +1,6 @@
-use std::env;
-
 use config::Config;
+use dotenv::dotenv;
+use std::env;
 
 /// Configuration of the MQTT connection
 #[derive(Debug, Clone, Default, serde_derive::Deserialize, PartialEq, Eq)]
@@ -98,6 +98,7 @@ pub static DEFAULT_TIMEZONE: &str = "UTC";
 
 /// Read the configuration
 pub fn read_configuration() -> AppConfig {
+    dotenv().ok();
     let settings = Config::builder()
         // Add optional file source `./config.yml"
         .add_source(config::File::with_name("config").required(false))

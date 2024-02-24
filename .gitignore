@@ -4,3 +4,4 @@ config.yml
 docker-compose.yml
 .project
 /.vscode
+.env
