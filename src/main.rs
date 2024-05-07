@@ -60,14 +60,14 @@ pub async fn connect_to_mqtt(
 
 /// Collects all results and prints them as JSON to the screen
 async fn collect_and_print_results(
-    devices: &Vec<AppDevice>,
+    devices: &[AppDevice],
     manager: &Manager,
     seconds_to_scan: u64,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     debug!("Start collecting data ...");
 
     // MAC adresses to check for ThermoBeacon devices
-    let macs = &devices
+    let macs: Vec<BDAddr> = devices
         .iter()
         .map(|f| f.mac.parse::<BDAddr>().unwrap() as BDAddr)
         .collect();
@@ -101,13 +101,13 @@ async fn collect_and_print_results(
 /// Collects all results and sends them to the given MQTT client
 async fn collect_and_send_results(
     cli: &AsyncClient,
-    devices: &Vec<AppDevice>,
+    devices: &[AppDevice],
     manager: &Manager,
     seconds_to_scan: u64,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     debug!("Start collecting data ...");
     // MAC addresses to check for ThermoBeacon devices
-    let macs = &devices
+    let macs: Vec<BDAddr> = devices
         .iter()
         .map(|f| f.mac.parse::<BDAddr>().unwrap() as BDAddr)
         .collect();
@@ -155,23 +155,18 @@ async fn collect_and_send_results(
 }
 
 /// Executes the actual job: Check mqtt config, connect if possible else just print the results.
-async fn job(config: &AppConfig, manager: &Manager) -> Result<(), Box<dyn Error + Send + Sync>> {
-    let client = match &config.mqtt {
-        Some(mqtt_config) => match &mqtt_config.url {
-            Some(_) => connect_to_mqtt(mqtt_config).await,
-            None => Err("No MQTT configuration found".into()),
-        },
-        None => Err("No MQTT configuration found".into()),
-    };
+async fn job(
+    config: &AppConfig,
+    manager: &Manager,
+    client: Option<AsyncClient>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     match client {
-        Ok(c) => {
+        Some(c) => {
             collect_and_send_results(&c, &config.devices, manager, config.seconds_to_scan).await?;
-
-            c.disconnect(None).await?;
         }
-        Err(_) => {
+        None => {
             warn!("No valid mqtt configuration found. Results are just printed to the console");
-            collect_and_print_results(&config.devices, &manager, config.seconds_to_scan).await?;
+            collect_and_print_results(&config.devices, manager, config.seconds_to_scan).await?;
         }
     }
     Ok(())
@@ -181,6 +176,7 @@ async fn job(config: &AppConfig, manager: &Manager) -> Result<(), Box<dyn Error 
 async fn run_scheduled(
     manager: Manager,
     config: AppConfig,
+    client: Option<AsyncClient>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     // There is some cron expression present, so we execute the job at a regular interval. Also check for a timezone to correctly calculate next execution.
     let cron_str = config.cron.clone().unwrap();
@@ -205,7 +201,7 @@ async fn run_scheduled(
         // Sleep until the next run
         tokio::time::sleep_until(instant).await;
         // Finally execute run
-        match job(&config, &manager).await {
+        match job(&config, &manager, client.clone()).await {
             Ok(()) => {
                 set_health_status(HealthStatus::Ok);
                 debug!("Run was successful");
@@ -231,10 +227,28 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     debug!("config {:?}", &config);
 
-    if let Some(mqtt_config) = &config.mqtt {
-        if mqtt_config.homeassistant {
-            info!("Home Assistant auto-discovery enabled!");
-            homeassistant::publish_homeassistant_device_discovery_messages(&config).await?;
+    let client = if let Some(mqtt_config) = &config.mqtt {
+        let client = connect_to_mqtt(mqtt_config).await;
+        match client {
+            Ok(c) => Some(c),
+            Err(e) => {
+                error!("Failed to connect to MQTT server: {}", e);
+                None
+            }
+        }
+    } else {
+        info!("No MQTT configuration found");
+        None
+    };
+
+    // If an mqtt client is available and homea
+    if let Some(cli) = &client {
+        if let Some(mqtt_config) = &config.mqtt {
+            if mqtt_config.homeassistant {
+                info!("Home Assistant auto-discovery enabled!");
+                homeassistant::publish_homeassistant_device_discovery_messages(&config, cli)
+                    .await?;
+            }
         }
     }
 
@@ -251,10 +265,12 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         } else {
             debug!("Health check server not active");
         }
-        tokio::spawn(run_scheduled(manager, config)).await?.unwrap();
+        tokio::spawn(run_scheduled(manager, config, client))
+            .await?
+            .unwrap();
     } else {
         info!("No cron descriptor found -> job is executed just once!");
-        match job(&config, &manager).await {
+        match job(&config, &manager, client).await {
             Ok(()) => {
                 set_health_status(HealthStatus::Ok);
                 debug!("Run was successful");

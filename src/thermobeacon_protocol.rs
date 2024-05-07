@@ -163,7 +163,7 @@ impl From<ThermoBeaconMinMaxRawData> for ThermoBeaconMinMaxData {
 
 /// Returns the length of the manufacturer_data field
 fn get_property_length(properties: &PeripheralProperties) -> usize {
-    for key in properties.manufacturer_data.keys() {
+    if let Some(key) = properties.manufacturer_data.keys().next() {
         return match key {
             key if check_if_device_type_is_valid(key) => {
                 properties.manufacturer_data.get(key).unwrap().len()
@@ -171,7 +171,7 @@ fn get_property_length(properties: &PeripheralProperties) -> usize {
             _ => 0,
         };
     }
-    return 0;
+    0
 }
 
 /// Checks if the device type is valid
@@ -192,7 +192,7 @@ fn parse_thermo_beacon_data(
         match key {
             key if check_if_device_type_is_valid(key) => {
                 // Read the data
-                let data = p.manufacturer_data.get(&key).unwrap();
+                let data = p.manufacturer_data.get(key).unwrap();
                 trace!("  Fetched {:?} bytes of raw data", data.len());
 
                 if data.len() == 18 {
@@ -221,7 +221,7 @@ fn parse_thermo_beacon_min_max_data(
         match key {
             key if check_if_device_type_is_valid(key) => {
                 // Read the data
-                let data = p.manufacturer_data.get(&key).unwrap();
+                let data = p.manufacturer_data.get(key).unwrap();
                 trace!("  Fetched {:?} bytes of raw data", data.len());
 
                 if data.len() == 20 {
@@ -268,7 +268,7 @@ pub struct ThermoBeaconFullReadResult {
 /// Reads all possible available data for the configured devices
 pub async fn read_all_configured(
     manager: &Manager,
-    devices: &Vec<BDAddr>,
+    devices: &[BDAddr],
     seconds_to_scan: u64,
 ) -> Result<Vec<ThermoBeaconFullReadResult>, Box<dyn Error + Send + Sync>> {
     let time_to_wait_between_scans = 5;
@@ -292,107 +292,99 @@ pub async fn read_all_configured(
         } else {
             // All peripheral devices in range
             for peripheral in peripherals.iter() {
-                let device = devices.iter().find(|d| peripheral.address() == **d);
+                let device_present = devices.iter().any(|d| peripheral.address() == *d);
 
-                match device {
-                    Some(_d) => {
-                        let properties = peripheral.properties().await?;
+                if device_present {
+                    let properties = peripheral.properties().await?;
 
-                        if properties.is_some() {
-                            let mut props = properties.unwrap();
-                            let local_name = props
-                                .clone()
-                                .local_name
-                                .unwrap_or(String::from("(peripheral name unknown)"));
+                    if properties.is_some() {
+                        let mut props = properties.unwrap();
+                        let local_name = props
+                            .clone()
+                            .local_name
+                            .unwrap_or(String::from("(peripheral name unknown)"));
 
-                            if local_name == "ThermoBeacon" {
-                                let measurement = match get_property_length(&props) {
-                                    18 => {
-                                        // Temperature and humdity data is available
-                                        debug!(
+                        if local_name == "ThermoBeacon" {
+                            let measurement = match get_property_length(&props) {
+                                18 => {
+                                    // Temperature and humdity data is available
+                                    debug!(
                                         "Reading temperature and humidity from ThermoBeacon {:?}",
                                         peripheral.address()
                                     );
-                                        let data = parse_thermo_beacon_data(&props)?;
+                                    let data = parse_thermo_beacon_data(&props)?;
 
-                                        // Wait for the min_max data
-                                        while get_property_length(&props) != 20 {
-                                            time::sleep(Duration::from_secs(
-                                                time_to_wait_between_scans,
-                                            ))
-                                            .await;
-                                            props = match peripheral.properties().await? {
-                                                Some(p) => p,
-                                                None => props,
-                                            }
+                                    // Wait for the min_max data
+                                    while get_property_length(&props) != 20 {
+                                        time::sleep(Duration::from_secs(
+                                            time_to_wait_between_scans,
+                                        ))
+                                        .await;
+                                        props = match peripheral.properties().await? {
+                                            Some(p) => p,
+                                            None => props,
                                         }
-                                        debug!(
-                                        "Reading min and max temperature from ThermoBeacon {:?}",
-                                        peripheral.address()
-                                    );
-                                        let min_max_data =
-                                            parse_thermo_beacon_min_max_data(&props)?;
-
-                                        Some((data, min_max_data))
                                     }
-                                    20 => {
-                                        // Min-max data is available
-                                        debug!(
+                                    debug!(
                                         "Reading min and max temperature from ThermoBeacon {:?}",
                                         peripheral.address()
                                     );
-                                        let min_max_data =
-                                            parse_thermo_beacon_min_max_data(&props)?;
+                                    let min_max_data = parse_thermo_beacon_min_max_data(&props)?;
 
-                                        // Wait  temperature and humidity data
-                                        while get_property_length(&props) != 18 {
-                                            time::sleep(Duration::from_secs(
-                                                time_to_wait_between_scans,
-                                            ))
-                                            .await;
-                                            props = match peripheral.properties().await? {
-                                                Some(p) => p,
-                                                None => props,
-                                            }
+                                    Some((data, min_max_data))
+                                }
+                                20 => {
+                                    // Min-max data is available
+                                    debug!(
+                                        "Reading min and max temperature from ThermoBeacon {:?}",
+                                        peripheral.address()
+                                    );
+                                    let min_max_data = parse_thermo_beacon_min_max_data(&props)?;
+
+                                    // Wait  temperature and humidity data
+                                    while get_property_length(&props) != 18 {
+                                        time::sleep(Duration::from_secs(
+                                            time_to_wait_between_scans,
+                                        ))
+                                        .await;
+                                        props = match peripheral.properties().await? {
+                                            Some(p) => p,
+                                            None => props,
                                         }
-                                        debug!(
+                                    }
+                                    debug!(
                                         "Reading temperature and humidity from ThermoBeacon {:?}",
                                         peripheral.address()
                                     );
-                                        let data = parse_thermo_beacon_data(&props)?;
+                                    let data = parse_thermo_beacon_data(&props)?;
 
-                                        Some((data, min_max_data))
-                                    }
-                                    _ => None,
+                                    Some((data, min_max_data))
+                                }
+                                _ => None,
+                            };
+
+                            if let Some((data, min_max_data)) = measurement {
+                                let r = ThermoBeaconFullReadResult {
+                                    battery_level: data.battery_level,
+                                    humidity: data.humidity,
+                                    temperature: data.temperature,
+                                    uptime: data.uptime_s,
+                                    button_pressed: data.button_pressed,
+                                    mac: data.mac,
+                                    max_temperature: min_max_data.max_temperature,
+                                    min_temperature: min_max_data.min_temperature,
+                                    max_temp_time: min_max_data.max_temp_time,
+                                    min_temp_time: min_max_data.min_temp_time,
                                 };
 
-                                match measurement {
-                                    Some((data, min_max_data)) => {
-                                        let r = ThermoBeaconFullReadResult {
-                                            battery_level: data.battery_level,
-                                            humidity: data.humidity,
-                                            temperature: data.temperature,
-                                            uptime: data.uptime_s,
-                                            button_pressed: data.button_pressed,
-                                            mac: data.mac,
-                                            max_temperature: min_max_data.max_temperature,
-                                            min_temperature: min_max_data.min_temperature,
-                                            max_temp_time: min_max_data.max_temp_time,
-                                            min_temp_time: min_max_data.min_temp_time,
-                                        };
-
-                                        result.push(r);
-                                    }
-                                    None => {}
-                                }
+                                result.push(r);
                             }
                         }
                     }
-                    None => {}
                 }
             }
         }
         adapter.stop_scan().await?;
     }
-    return Ok(result);
+    Ok(result)
 }
