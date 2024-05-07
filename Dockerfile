@@ -3,6 +3,8 @@ FROM rust:slim-buster as builder
 ARG TARGETARCH
 ENV UPX_VERSION="4.2.2"
 ENV UPX_URL="https://github.com/upx/upx/releases/download/v${UPX_VERSION}/upx-${UPX_VERSION}-${TARGETARCH}_linux.tar.xz"
+# Workaround for https://github.com/rust-lang/cargo/issues/8719 on armv7
+ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 
 # Install dependencies required for build
 RUN    apt-get update \
