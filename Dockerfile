@@ -1,4 +1,4 @@
-FROM rust:slim-buster as builder
+FROM rust:slim-bookworm as builder
 
 ARG TARGETARCH
 ENV UPX_VERSION="4.2.2"
@@ -20,12 +20,13 @@ RUN    mkdir -p tools/upx/ \
 COPY . .
 
 # Start building ...
-RUN cargo build --release
+# Workaround for https://github.com/rust-lang/cargo/issues/8719 on armv7
+RUN --mount=type=tmpfs,target=/.cargo CARGO_HOME=/.cargo cargo build --release
 
 # Compress executable. This saves about 12MB (97MB -> 85MB) in the final image
 RUN ./tools/upx/upx --best --lzma target/release/thermobeacon-server
 
-FROM debian:buster-slim
+FROM debian:bookworm-slim
 
 # Install dependencies required for runtime
 RUN    apt-get update \ 
