@@ -40,7 +40,7 @@ pub async fn publish_homeassistant_device_discovery_messages(
 
         let topic_temperature = format!(
             "homeassistant/sensor/thermobeacon/{}_temperature/config",
-            device.mac.replace(":", "_")
+            device.mac.replace(':', "_")
         );
         let device_id = MQTTDiscoveryDevice {
             identifiers: vec![device.mac.clone()],
@@ -68,7 +68,7 @@ pub async fn publish_homeassistant_device_discovery_messages(
 
         let topic_humidity = format!(
             "homeassistant/sensor/thermobeacon/{}_humidity/config",
-            device.mac.replace(":", "_")
+            device.mac.replace(':', "_")
         );
         let payload_humidity = MQTTDiscovery {
             device_class: "humidity".to_string(),
@@ -81,7 +81,7 @@ pub async fn publish_homeassistant_device_discovery_messages(
 
         let topic_battery = format!(
             "homeassistant/sensor/thermobeacon/{}_battery/config",
-            device.mac.replace(":", "_")
+            device.mac.replace(':', "_")
         );
         let payload_battery = MQTTDiscovery {
             device_class: "battery".to_string(),
@@ -98,7 +98,7 @@ pub async fn publish_homeassistant_device_discovery_messages(
             topic_temperature,
             serde_json::to_string(&payload_temperature).unwrap()
         );
-        cli.publish(mqtt::Message::new(
+        cli.publish(mqtt::Message::new_retained(
             topic_temperature,
             serde_json::to_string(&payload_temperature).unwrap(),
             1,
@@ -111,7 +111,7 @@ pub async fn publish_homeassistant_device_discovery_messages(
             topic_humidity,
             serde_json::to_string(&payload_humidity).unwrap()
         );
-        cli.publish(mqtt::Message::new(
+        cli.publish(mqtt::Message::new_retained(
             topic_humidity,
             serde_json::to_string(&payload_humidity).unwrap(),
             1,
@@ -124,7 +124,7 @@ pub async fn publish_homeassistant_device_discovery_messages(
             topic_battery,
             serde_json::to_string(&payload_battery).unwrap()
         );
-        cli.publish(mqtt::Message::new(
+        cli.publish(mqtt::Message::new_retained(
             topic_battery,
             serde_json::to_string(&payload_battery).unwrap(),
             1,

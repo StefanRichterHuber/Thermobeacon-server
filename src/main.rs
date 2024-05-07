@@ -27,7 +27,7 @@ struct Message {
     name: String,
 }
 
-// Tries to connect to the MQTT server using the given MqttConfig
+/// Tries to connect to the MQTT server using the given MqttConfig
 pub async fn connect_to_mqtt(
     mqtt_config: &MqttConfig,
 ) -> Result<AsyncClient, Box<dyn Error + Send + Sync>> {
@@ -100,7 +100,7 @@ async fn collect_and_print_results(
 
 /// Collects all results and sends them to the given MQTT client
 async fn collect_and_send_results(
-    cli: &AsyncClient,
+    client: &AsyncClient,
     devices: &[AppDevice],
     manager: &Manager,
     seconds_to_scan: u64,
@@ -148,7 +148,7 @@ async fn collect_and_send_results(
         } else {
             mqtt::Message::new_retained(topic, payload, qos)
         };
-        cli.publish(msg).await?;
+        client.publish(msg).await?;
     }
 
     Ok(())
@@ -158,11 +158,11 @@ async fn collect_and_send_results(
 async fn job(
     config: &AppConfig,
     manager: &Manager,
-    client: Option<AsyncClient>,
+    client: &Option<AsyncClient>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     match client {
         Some(c) => {
-            collect_and_send_results(&c, &config.devices, manager, config.seconds_to_scan).await?;
+            collect_and_send_results(c, &config.devices, manager, config.seconds_to_scan).await?;
         }
         None => {
             warn!("No valid mqtt configuration found. Results are just printed to the console");
@@ -201,7 +201,7 @@ async fn run_scheduled(
         // Sleep until the next run
         tokio::time::sleep_until(instant).await;
         // Finally execute run
-        match job(&config, &manager, client.clone()).await {
+        match job(&config, &manager, &client).await {
             Ok(()) => {
                 set_health_status(HealthStatus::Ok);
                 debug!("Run was successful");
@@ -270,7 +270,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
             .unwrap();
     } else {
         info!("No cron descriptor found -> job is executed just once!");
-        match job(&config, &manager, client).await {
+        match job(&config, &manager, &client).await {
             Ok(()) => {
                 set_health_status(HealthStatus::Ok);
                 debug!("Run was successful");

@@ -119,13 +119,13 @@ pub fn read_configuration() -> AppConfig {
     if config
         .mqtt
         .as_ref()
-        .and_then(|c| Some(c.password.is_none() && c.password_file.is_some()))
+        .map(|c| c.password.is_none() && c.password_file.is_some())
         .unwrap_or(false)
     {
         let mqttconfig = config.mqtt.unwrap();
         let file = mqttconfig.password_file.as_ref().unwrap();
 
-        let filepw = std::fs::read_to_string(&file);
+        let filepw = std::fs::read_to_string(file);
 
         config = match filepw {
             Ok(pw) => AppConfig {
@@ -155,5 +155,5 @@ pub fn read_configuration() -> AppConfig {
         };
     }
 
-    return config;
+    config
 }
