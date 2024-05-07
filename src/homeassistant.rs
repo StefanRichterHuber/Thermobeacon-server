@@ -27,6 +27,11 @@ pub async fn publish_homeassistant_device_discovery_messages(
     config: &crate::configuration::AppConfig,
     cli: &AsyncClient,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    if !cli.is_connected() {
+        info!("MQTT client is not connected. Try to reconnect ...");
+        cli.reconnect().await?;
+    }
+
     for device in &config.devices {
         // https://www.home-assistant.io/integrations/mqtt/
         // https://www.home-assistant.io/integrations/sensor/

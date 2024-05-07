@@ -148,6 +148,10 @@ async fn collect_and_send_results(
         } else {
             mqtt::Message::new_retained(topic, payload, qos)
         };
+        if !client.is_connected() {
+            info!("MQTT client is not connected. Try to reconnect ...");
+            client.reconnect().await?;
+        }
         client.publish(msg).await?;
     }
 
@@ -241,7 +245,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         None
     };
 
-    // If an mqtt client is available and homea
+    // If an mqtt client is available, configure HA
     if let Some(cli) = &client {
         if let Some(mqtt_config) = &config.mqtt {
             if mqtt_config.homeassistant {
