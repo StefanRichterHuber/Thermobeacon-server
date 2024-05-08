@@ -7,7 +7,7 @@ use std::env;
 pub struct MqttConfig {
     /// URL of the MQTT server
     pub url: Option<String>,
-    #[serde(rename(deserialize = "keepAlive"))]
+    #[serde(rename(deserialize = "keepAlive"), default = "default_keep_alive")]
     /// Keep alive time of the connection to the server
     pub keep_alive: u64,
     #[serde(rename(deserialize = "username"))]
@@ -20,6 +20,11 @@ pub struct MqttConfig {
     /// Optional support for Home assistant
     #[serde(default)]
     pub homeassistant: bool,
+}
+
+/// Default keep_alive value 60s
+fn default_keep_alive() -> u64 {
+    60
 }
 
 /// Configuration of a single known ThermoBeacon device
