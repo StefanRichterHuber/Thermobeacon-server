@@ -44,7 +44,7 @@ pub struct ThermoBeaconRawData {
     uptime_seconds: u32,
 }
 
-/// Raw data from ThermoBeacon containg the min / max temperature. Struct uses PackedStruct to parse a byte array
+/// Raw data from ThermoBeacon containing the min / max temperature. Struct uses PackedStruct to parse a byte array
 /// @see https://github.com/iskalchev/ThermoBeacon-pyhap
 ///
 /// Message length: 22 bytes

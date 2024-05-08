@@ -22,7 +22,7 @@ pub struct MqttConfig {
     pub homeassistant: bool,
 }
 
-/// Default keep_alive value 60s
+/// Default keep_alive value
 fn default_keep_alive() -> u64 {
     60
 }
@@ -110,9 +110,6 @@ pub fn read_configuration() -> AppConfig {
         // Add in settings from the environment (with a prefix of APP)
         // Eg.. `APP_DEBUG=1 ./target/app` would set the `debug` key.  APP_MQTT_PASSWORD would set mqtt.password key.
         .add_source(config::Environment::with_prefix("APP").separator("_"))
-        // Default connection keep alive of 20s
-        .set_default("mqtt.keepAlive", 20)
-        .unwrap()
         .set_default("seconds_to_scan", 30)
         .unwrap()
         .build()
