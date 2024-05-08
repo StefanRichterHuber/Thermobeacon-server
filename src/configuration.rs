@@ -92,10 +92,15 @@ pub struct AppConfig {
     /// MQTT client configuration
     pub mqtt: Option<MqttConfig>,
     /// Time in seconds to scan for devices
+    #[serde(default = "default_seconds_to_scan")]
     pub seconds_to_scan: u64,
     /// Health check options
     #[serde(default)]
     pub health: HealthCheckConfig,
+}
+
+fn default_seconds_to_scan() -> u64 {
+    45
 }
 
 /// Timezone assumed if none configured
@@ -110,8 +115,6 @@ pub fn read_configuration() -> AppConfig {
         // Add in settings from the environment (with a prefix of APP)
         // Eg.. `APP_DEBUG=1 ./target/app` would set the `debug` key.  APP_MQTT_PASSWORD would set mqtt.password key.
         .add_source(config::Environment::with_prefix("APP").separator("_"))
-        .set_default("seconds_to_scan", 30)
-        .unwrap()
         .build()
         .unwrap();
 
