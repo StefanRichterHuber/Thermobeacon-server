@@ -13,7 +13,7 @@ lto = true   # Link time optimzation 5.9M => 5.4M, 51s build
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-btleplug = { version = "0.11", features = ["serde"] }
+btleplug = { version = "0.13", features = ["serde"] }
 rand = "0.8.5"
 pretty_env_logger = "0.5"
 log = "0.4"
