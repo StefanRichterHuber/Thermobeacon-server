@@ -14,7 +14,7 @@ lto = true   # Link time optimzation 5.9M => 5.4M, 51s build
 
 [dependencies]
 btleplug = { version = "0.13", features = ["serde"] }
-rand = "0.8.5"
+rand = "0.10.0"
 pretty_env_logger = "0.5"
 log = "0.4"
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
