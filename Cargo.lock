@@ -630,11 +630,11 @@ dependencies = [
 
 [[package]]
 name = "cron-parser"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c4407ef20f58de436de48f3e96c8885337d236a13584d45017ae8c567c7a0b3"
+checksum = "24ebc35f19b97e9867fbfcd8e72c2dc490341d43218a33cd6db762dfb4020cd1"
 dependencies = [
- "chrono",
+ "jiff",
 ]
 
 [[package]]
